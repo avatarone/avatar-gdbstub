@@ -125,6 +125,12 @@ void put_hex_uint32(StubState *state, uint32_t val)
     put_hex_uint8(state, val);
 }
 
+void put_hex_uint16(StubState *state, uint16_t val)
+{
+    put_hex_uint8(state, val >> 8);
+    put_hex_uint8(state, val);
+}
+
 static uint32_t get_hex_uint32(StubState *state, int len)
 {
     uint32_t val = 0;
@@ -275,7 +281,13 @@ void HostInterface_communicate(StubState *state)
                             {
                                 value_t buf = Memory_read_typed(state, address, len);
                                 //TODO: Only works on little endian
-                                put_hex_buffer(state, (const uint8_t *) &buf, len);
+                                //put_hex_buffer(state, (const uint8_t *) &buf, len);
+								if (len == 4)
+									put_hex_uint32(state, buf);
+								if (len == 2)
+									put_hex_uint16(state, (uint16_t)buf);
+								if (len == 1)
+									put_hex_uint8(state, (uint8_t)buf);
                                 
                             }
                             else
@@ -345,11 +357,11 @@ void HostInterface_communicate(StubState *state)
                         for (i = 0; i < 16; i++)
                         {
                             val = RegisterMap_get_register(state, Gdb_map_gdb_register_number_to_stub(state, i));
-                            put_hex_buffer(state, (const uint8_t *) &val, 4);
+							put_hex_uint32(state, val);
                         }
                         
                         val = RegisterMap_get_register(state, Gdb_map_gdb_register_number_to_stub(state, 25));
-                        put_hex_buffer(state, (const uint8_t *) &val, 4);
+						put_hex_uint32(state, val);
                         
                         end_packet(state);
                     } while (Serial_read_byte_blocking() != '+');
@@ -405,7 +417,7 @@ void HostInterface_communicate(StubState *state)
                     val = RegisterMap_get_register(state, Gdb_map_gdb_register_number_to_stub(state, reg_id));
                     start_packet(state);
                     //TODO: Register size is ARM specific
-                    put_hex_buffer(state, (const uint8_t *) &val, 4);
+					put_hex_uint32(state, val);
                     end_packet(state);
                 }
                 break;
