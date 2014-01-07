@@ -1,0 +1,72 @@
+/*
+ * Copyright 2013-2014 Jonas Zaddach <zaddach@eurecom.fr>, EURECOM
+ *
+ * You can redistribute and/or modify this program under the terms of the
+ * GNU General Public License version 2 or later.
+ */
+
+#include "Serial.h"
+
+
+#ifndef UART_PL011_BASE
+#error Configuration value UART_PL011_BASE must be set, e.g. to ((volatile uint32_t *) 0x400D3000)
+#endif 
+
+#define UART_BASE (UART_PL011_BASE)
+
+
+#define UART_REG_DATA 0
+#define UART_REG_STATUS 1
+#define UART_REG_FLAG 6
+#define UART_REG_CONTROL 12
+
+#define UART_STATUS_OVERRUN_ERR (1 << 3)
+#define UART_STATUS_BREAK_ERR (1 << 2)
+#define UART_STATUS_PARITY_ERR (1 << 1)
+#define UART_STATUS_FRAMING_ERR (1 << 0)
+
+#define UART_FLAG_TXFE (1 << 7)
+#define UART_FLAG_RXFF (1 << 6)
+#define UART_FLAG_TXFF (1 << 5)
+#define UART_FLAG_RXFE (1 << 4)
+#define UART_FLAG_BUSY (1 << 3)
+
+void Serial_init(void)
+{
+}
+
+int Serial_write_byte(uint8_t data)
+{
+    
+    while (UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFF);
+    
+    UART_BASE[UART_REG_DATA] = (uint32_t) data;
+    
+    return 0;
+}
+
+int Serial_is_data_available(void)
+{
+    return (UART_BASE[UART_REG_FLAG] & UART_FLAG_RXFE) == 0;
+}
+
+int Serial_read_byte_blocking(void)
+{
+    while (!Serial_is_data_available());
+    
+    if (UART_BASE[UART_REG_STATUS] & 0xF)
+    {
+        //TODO: some error
+    }
+    else
+    {
+        return UART_BASE[UART_REG_DATA];
+    }
+    
+    return -1;
+}
+
+void Serial_flush_write()
+{
+    while (!(UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFE));
+}
