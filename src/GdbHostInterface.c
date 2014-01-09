@@ -26,32 +26,32 @@ static void target_exit_monitor(StubState *state)
 {
 }
 #ifndef signal_debug_enter
-#define signal_debug_enter() do {} while (0)
+#define signal_debug_enter(...) do {} while (0)
 #endif
 #ifndef signal_debug_exit
-#define signal_debug_exit() do {} while (0)
+#define signal_debug_exit(...) do {} while (0)
 #endif
 #ifndef set_hw_breakpoint
-#define signal_debug_enter() do {} while (0)
+#define set_hw_breakpoint(...) do {} while (0)
 #endif
 #ifndef set_hw_watchpoint
-#define signal_debug_enter() do {} while (0)
+#define set_hw_watchpoint(...) do {} while (0)
 #endif
 
 #ifndef flush_data_cache
-#define flush_data_cache() do {} while (0)
+#define flush_data_cache(...) do {} while (0)
 #endif
 
 #ifndef invalidate_instruction_cache
-#define invalidate_instruction_cache() do {} while (0)
+#define invalidate_instruction_cache(...) do {} while (0)
 #endif
 
 #ifndef invalidate_data_cache
-#define invalidate_data_cache() do {} while (0)
+#define invalidate_data_cache(...) do {} while (0)
 #endif
 
 #ifndef flush_data_cache_by_mva
-#define flush_data_cache_by_mva(a) do {} while (0)
+#define flush_data_cache_by_mva(...) do {} while (0)
 #endif
 
 static void start_packet(StubState *state);
