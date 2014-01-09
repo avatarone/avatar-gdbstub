@@ -31,6 +31,10 @@
 #define UART_FLAG_RXFE (1 << 4)
 #define UART_FLAG_BUSY (1 << 3)
 
+#ifndef WATCHDOG_EXCITE
+#define WATCHDOG_EXCITE do {} while (0)
+#endif
+
 void Serial_init(void)
 {
 }
@@ -38,7 +42,8 @@ void Serial_init(void)
 int Serial_write_byte(uint8_t data)
 {
     
-    while (UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFF);
+    while (UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFF)
+		WATCHDOG_EXCITE;
     
     UART_BASE[UART_REG_DATA] = (uint32_t) data;
     
@@ -52,7 +57,9 @@ int Serial_is_data_available(void)
 
 int Serial_read_byte_blocking(void)
 {
-    while (!Serial_is_data_available());
+	int ret;
+    while (!Serial_is_data_available())
+		WATCHDOG_EXCITE;
     
     if (UART_BASE[UART_REG_STATUS] & 0xF)
     {
@@ -68,5 +75,6 @@ int Serial_read_byte_blocking(void)
 
 void Serial_flush_write()
 {
-    while (!(UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFE));
+    while (!(UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFE))
+		WATCHDOG_EXCITE;
 }
