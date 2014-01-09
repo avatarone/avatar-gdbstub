@@ -474,6 +474,34 @@ void HostInterface_communicate(StubState *state)
                 put_ok_packet(state);
                 break;
             } 
+			case 'z':
+			{
+				uint32_t type = get_packet_byte(state);
+				switch (type) {
+				case '1':
+				{
+					/* hw breakpoint */
+
+					/* skip , */
+					get_packet_byte(state);
+					/* addr */
+					uint32_t addr = get_hex_uint32(state, 4);
+					/* skip , */
+					get_packet_byte(state);
+					/* kind */
+					uint32_t kind = get_hex_uint32(state, 4);
+					receive_packet_end(state);
+					set_hw_breakpoint(state, addr, 0);
+					put_ok_packet(state);
+					break;
+				}
+				default:
+					ignore_rest_of_packet(state);
+					put_empty_packet(state);
+					break;
+				}
+				break;
+			}
             default:
             {
                 if (ignore_rest_of_packet(state))
