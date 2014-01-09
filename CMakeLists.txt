@@ -18,5 +18,6 @@ SET(CMAKE_ASM_FLAGS "-fPIC -Wall" )
 
 #INCLUDE (cmake/avatarstub_qemu_versatilepb.cmake)
 #INCLUDE (cmake/avatarstub_ST3320413AS_0x7000.cmake)
-INCLUDE (cmake/gdbstub_ST3320413AS_0x7000.cmake)
-INCLUDE (cmake/gdbstub_qemu_versatilepb.cmake)
+#INCLUDE (cmake/gdbstub_ST3320413AS_0x7000.cmake)
+#INCLUDE (cmake/gdbstub_qemu_versatilepb.cmake)
+INCLUDE (cmake/gdbstub_plc_bootloader_0x16000.cmake)
