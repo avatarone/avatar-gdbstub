@@ -12,14 +12,47 @@
 #include "ArmGdbHelpers.h"
 #include "Assert.h"
 #include "gdb_utils.h"
+#include "SerialIO.h"
 
 static void target_enter_monitor(StubState *state)
 {
 }
+#ifdef HAS_LOW_LEVEL_HELPERS
+/* XXX: Hack */
+#include "armv7_cortex_r4.h"
+#endif
 
 static void target_exit_monitor(StubState *state)
 {
 }
+#ifndef signal_debug_enter
+#define signal_debug_enter() do {} while (0)
+#endif
+#ifndef signal_debug_exit
+#define signal_debug_exit() do {} while (0)
+#endif
+#ifndef set_hw_breakpoint
+#define signal_debug_enter() do {} while (0)
+#endif
+#ifndef set_hw_watchpoint
+#define signal_debug_enter() do {} while (0)
+#endif
+
+#ifndef flush_data_cache
+#define flush_data_cache() do {} while (0)
+#endif
+
+#ifndef invalidate_instruction_cache
+#define invalidate_instruction_cache() do {} while (0)
+#endif
+
+#ifndef invalidate_data_cache
+#define invalidate_data_cache() do {} while (0)
+#endif
+
+#ifndef flush_data_cache_by_mva
+#define flush_data_cache_by_mva(a) do {} while (0)
+#endif
 
 static void start_packet(StubState *state);
 static void put_string(StubState *state, const char * str);
@@ -278,7 +311,8 @@ void HostInterface_communicate(StubState *state)
                         {
                             if ((len == 4 && ((address & 3) == 0)) || (len == 2 && ((address & 1) == 0)) || len == 1)
                             {
-                                value_t buf = Memory_read_typed(state, address, len);
+								invalidate_data_cache();
+								value_t buf = Memory_read_typed(state, address, len);
                                 //TODO: Only works on little endian
                                 //put_hex_buffer(state, (const uint8_t *) &buf, len);
 								if (len == 4)
@@ -296,6 +330,7 @@ void HostInterface_communicate(StubState *state)
                         
                                 for (i = 0; i < len; i++)
                                 {
+									invalidate_data_cache();
                                     buf = Memory_read_typed(state, address + i, SIZE_CHAR);
                                     put_hex_buffer(state, (const uint8_t *) &buf, 1);
                                 }
@@ -323,6 +358,7 @@ void HostInterface_communicate(StubState *state)
                     {
                         uint32_t buf = get_hex_uint32(state, len);
                         Memory_write_typed(state, address, len, buf);
+						flush_data_cache_by_mva(address);
                     }
                     else 
                     {
@@ -333,6 +369,7 @@ void HostInterface_communicate(StubState *state)
                         {
                             get_hex_buffer(state, &buf, 1);
                             Memory_write_typed(state, address + i, SIZE_CHAR, buf); 
+							flush_data_cache_by_mva(address+i);
                         }
                     }
                     
@@ -388,8 +425,11 @@ void HostInterface_communicate(StubState *state)
             {
                 if (receive_packet_end(state))
                 {
+					/* we should do this because we're accessing the *PC */
+					invalidate_data_cache();
                     Gdb_continue_execution(state);
                     target_exit_monitor(state);
+					invalidate_instruction_cache();
                     return;
                 }
                 else {
