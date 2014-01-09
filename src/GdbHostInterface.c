@@ -35,19 +35,14 @@ static void put_hex_uint8(StubState *state, uint8_t val)
     Serial_write_byte(c);
 }
 
+
 void put_hex_buffer(StubState *state, const uint8_t * buffer, int len)
 {
     int i;
-    char c;
     
     for (i = 0; i < len; i++)
     {
-        c = nibble_to_hex_char(buffer[i] >> 4);
-        state->host_interface.output_checksum += c;
-        Serial_write_byte(c);
-        c = nibble_to_hex_char(buffer[i]);
-        state->host_interface.output_checksum += c;
-        Serial_write_byte(c);
+		put_hex_uint8(state, buffer[i]);
     }
 }
 
@@ -157,13 +152,17 @@ static uint32_t get_hex_uint32(StubState *state, int len)
     return val;
 } 
 
-static void get_hex_buffer(StubState *state, void * buffer, int len)
+static void get_hex_buffer(StubState *state, uint8_t *buffer, int len)
 {
+	/* XXX: calling this function and the casting the result (buffer) to
+	 * uint32_t is forbidden, because this code should run on big and
+	 * little endian machines
+	 */
     int i = 0;
     
     for (i = 0; i < len; i++)
     {
-        ((uint8_t *) buffer)[i] = get_hex_uint32(state, 1);
+        buffer[i] = (uint8_t) get_hex_uint32(state, 1);
     }
 }
 
@@ -322,8 +321,7 @@ void HostInterface_communicate(StubState *state)
                 {
                     if ((len == 4 && ((address & 0x3) == 0)) || (len == 2 && ((address & 1) == 0)) || len == 1)
                     {
-                        uint32_t buf;
-                        get_hex_buffer(state, &buf, len);
+                        uint32_t buf = get_hex_uint32(state, len);
                         Memory_write_typed(state, address, len, buf);
                     }
                     else 
@@ -376,11 +374,11 @@ void HostInterface_communicate(StubState *state)
                 //TODO: ARM specific
                 for (i = 0; i < 16; i++)
                 {
-                    get_hex_buffer(state, (uint8_t *) &val, 4);
+					val = get_hex_uint32(state, 4);
                     RegisterMap_set_register(state, Gdb_map_gdb_register_number_to_stub(state, i), val);     
                 }
                 
-                get_hex_buffer(state, (uint8_t *) &val, 4);
+				val = get_hex_uint32(state, 4);
                 RegisterMap_set_register(state, Gdb_map_gdb_register_number_to_stub(state, 25), val);
                     
                 ignore_rest_of_packet(state);
@@ -425,8 +423,7 @@ void HostInterface_communicate(StubState *state)
             case 'P':
             {
                 uint32_t reg_id = get_hex_uint32(state, 8);
-                register_t val;
-                get_hex_buffer(state, (uint8_t *) &val, 4);
+                register_t val = get_hex_uint32(state, 4);
                 RegisterMap_set_register(state, Gdb_map_gdb_register_number_to_stub(state, reg_id), val);
                 receive_packet_end(state);
                 put_ok_packet(state);
