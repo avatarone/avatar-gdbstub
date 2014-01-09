@@ -61,13 +61,19 @@ int Serial_read_byte_blocking(void)
     while (!Serial_is_data_available())
 		WATCHDOG_EXCITE;
     
+	ret = UART_BASE[UART_REG_DATA];
+	/* XXX: we want to make sure that we are reading the data before
+	 * reading the error. We need a data barrier here.
+	 */
     if (UART_BASE[UART_REG_STATUS] & 0xF)
     {
+		/* reset the error */
+		UART_BASE[UART_REG_STATUS] = 0;
         //TODO: some error
     }
     else
     {
-        return UART_BASE[UART_REG_DATA];
+        return ret;
     }
     
     return -1;
