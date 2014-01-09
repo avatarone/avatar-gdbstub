@@ -440,6 +440,7 @@ void HostInterface_communicate(StubState *state)
                     ignore_rest_of_packet(state);
                     put_signal_packet(state);
                 }
+				break;
             }
             case '?':
             {
