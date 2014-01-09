@@ -31,6 +31,10 @@
 #define UART_FLAG_RXFE (1 << 4)
 #define UART_FLAG_BUSY (1 << 3)
 
+#ifndef WATCHDOG_EXCITE
+#define WATCHDOG_EXCITE do {} while (0)
+#endif
+
 void Serial_init(void)
 {
 }
@@ -38,7 +42,8 @@ void Serial_init(void)
 int Serial_write_byte(uint8_t data)
 {
     
-    while (UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFF);
+    while (UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFF)
+		WATCHDOG_EXCITE;
     
     UART_BASE[UART_REG_DATA] = (uint32_t) data;
     
@@ -52,15 +57,23 @@ int Serial_is_data_available(void)
 
 int Serial_read_byte_blocking(void)
 {
-    while (!Serial_is_data_available());
+	int ret;
+    while (!Serial_is_data_available())
+		WATCHDOG_EXCITE;
     
+	ret = UART_BASE[UART_REG_DATA];
+	/* XXX: we want to make sure that we are reading the data before
+	 * reading the error. We need a data barrier here.
+	 */
     if (UART_BASE[UART_REG_STATUS] & 0xF)
     {
+		/* reset the error */
+		UART_BASE[UART_REG_STATUS] = 0;
         //TODO: some error
     }
     else
     {
-        return UART_BASE[UART_REG_DATA];
+        return ret;
     }
     
     return -1;
@@ -68,5 +81,6 @@ int Serial_read_byte_blocking(void)
 
 void Serial_flush_write()
 {
-    while (!(UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFE));
+    while (!(UART_BASE[UART_REG_FLAG] & UART_FLAG_TXFE))
+		WATCHDOG_EXCITE;
 }

@@ -8,10 +8,10 @@
 #include "StubState.h"
 #include "HostInterface.h"
 
-static StubState state;
 
 void stub_handle_exception(unsigned signal, void * register_map)
 {
+	StubState state;
     state.signal = signal;
     state.register_map = register_map;
     
