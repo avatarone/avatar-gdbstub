@@ -282,6 +282,7 @@ void HostInterface_communicate(StubState *state)
     target_enter_monitor(state);
  
     put_signal_packet(state);
+	signal_debug_enter();
     
     while (1)
     {
@@ -429,6 +430,7 @@ void HostInterface_communicate(StubState *state)
 					invalidate_data_cache();
                     Gdb_continue_execution(state);
                     target_exit_monitor(state);
+					signal_debug_exit();
 					invalidate_instruction_cache();
                     return;
                 }
@@ -457,7 +459,9 @@ void HostInterface_communicate(StubState *state)
                     //TODO: Register size is ARM specific
 					put_hex_uint32(state, val);
                     end_packet(state);
-                }
+                } else {
+					put_error_packet(state, 1);
+				}
                 break;
             } 
             case 'P':
