@@ -13,6 +13,7 @@
 #include "Assert.h"
 #include "gdb_utils.h"
 #include "SerialIO.h"
+#include "crc.h"
 
 static void target_enter_monitor(StubState *state)
 {
@@ -499,6 +500,33 @@ void HostInterface_communicate(StubState *state)
 					ignore_rest_of_packet(state);
 					put_empty_packet(state);
 					break;
+				}
+				break;
+			}
+			case 'u':
+			{
+				/* compute the crc of a buffer:
+				 * the format is simillar with the 'm' message:
+				 * $m148ac,4#2e
+				 * the reply is the checksum (one byte)
+				 */
+				uint32_t address = get_hex_uint32(state, 8);
+				uint32_t len = get_hex_uint32(state, 8);
+
+				if (received_packet_verify(state)) {
+					uint8_t crc, buf;
+					uint32_t i;
+					invalidate_data_cache();
+					crc = 0;
+					for (i = 0; i < len; ++i) {
+						buf = Memory_read_typed(state, address + i, SIZE_CHAR);
+						crc_calc(&crc, buf);
+					}
+					start_packet(state);
+					put_hex_uint8(state, crc);
+					end_packet(state);
+				} else {
+					put_error_packet(state, 1);
 				}
 				break;
 			}
