@@ -11,6 +11,7 @@ SET (STUB_ASSEMBLER_FILES
 SET (STUB_ARM_FILES
 	src/GdbHostInterface.c
 	#	src/gdbstub_arm.c
+	src/crc.c
 	src/utils.c 
 	src/Serial_pl011.c
 	src/ArmRegisterMap.c
