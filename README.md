@@ -16,3 +16,10 @@ Adapting the GDB stub for your platform is easy: Copy one of the
 existing gdbstub_*.cmake files in the cmake/ directory and adapt
 it to your platform. You might need to develop additional serial
 drivers and platform initialization files.
+
+
+*test_programs* contains simple programs that test one functionality
+of an embedded system - e.g., serial output, CPU features, debug
+features.
+Those programs are meant to discover an embedded system before the
+GDB stub is ported. 

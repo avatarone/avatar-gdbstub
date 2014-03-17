@@ -124,7 +124,7 @@ Leach_mode:
         mov r1, sp
 
         /* gdb_monitor(address_t pc, void * register_file) */
-        blx stub_handle_exception
+        bl stub_handle_exception
 
         /* Restore banked registers */
         /* First ABRT mode SPSR */
