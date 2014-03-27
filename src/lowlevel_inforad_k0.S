@@ -15,7 +15,7 @@
 _start:
 		/* The exception vector table */
 		b _reset /* RST */
-		b .      /* UND */
+		ldr =_arm_UND_handler /* UND */
 		b .      /* SVC */
 		ldr =_arm_PAB_handler /* PAB */
 		ldr =_arm_DAB_handler /* DAB */
@@ -31,9 +31,6 @@ _reset:
 		ldr sp, =0x60017ffc
         
         /* Hit breakpoint to allow GDB initialization */
-		sub sp, sp, #0x50
-		mov r0, #5
-		mov r1, sp
-		bl stub_handle_exception
-        bx r3
-	
+		.long 0xe7f001f0
+
+		b .

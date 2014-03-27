@@ -19,6 +19,7 @@
 	
     .global _arm_PAB_handler
     .global _arm_DAB_handler
+    .global _arm_UND_handler
 	.global get_code_offset
 /*    .global _arm_RST_handler
     .global _arm_UND_handler
@@ -34,11 +35,23 @@
 b _start
 b _arm_PAB_handler
 b _arm_DAB_handler
+b _arm_UND_handler
 
 	
 .section .text
 .arm
         
+_arm_UND_handler:
+		push {r0}
+		mrs r0, SPSR
+		tst r0, #0x20
+		subeq lr, lr, #4
+		subne lr, lr, #2
+		pop {r0}
+		push {lr}
+		mov lr, #5 /* SIG_TRAP */
+
+        b _abort_handlers
 
 _arm_PAB_handler:
         /* 
