@@ -2,14 +2,14 @@
 CC = arm-none-eabi-gcc
 LD = arm-none-eabi-gcc
 CFLAGS = -Wall -O0 -Wno-unused-function
-LDFLAGS = -nostdlib -nostdinc -nostartfiles
+LDFLAGS = -nostdlib -nostdinc -nostartfiles -T link.ld
 OBJCOPY = arm-none-eabi-objcopy
 
 
-inforad_k0_%: CFLAGS += -mcpu=arm7tdmi -include startup_inforad_k0.h -include uart_sirf.h
-inforad_k0_%: LDFLAGS += -mcpu=arm7tdmi -Ttext=0x0
+inforad_k0_%.o: CFLAGS += -mcpu=arm7tdmi -include startup_inforad_k0.h -include uart_sirf.h
+inforad_k0_%.elf: LDFLAGS += -mcpu=arm7tdmi -Ttext=0x0
 
-all: inforad_k0_hello_world.bin inforad_k0_debug.bin inforad_k0_cpuid.bin
+all: inforad_k0_hello_world.bin inforad_k0_debug.bin inforad_k0_cpuid.bin inforad_k0_swbreakpoint.bin
 
 %.bin: %.elf
 	$(OBJCOPY) -Obinary $< $@
@@ -24,6 +24,9 @@ all: inforad_k0_hello_world.bin inforad_k0_debug.bin inforad_k0_cpuid.bin
 	$(CC) $(CFLAGS) -c -o $@ $^
 	
 %_debug.o:  debug.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+%_swbreakpoint.o:  swbreakpoint.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 	
 .PHONY: clean

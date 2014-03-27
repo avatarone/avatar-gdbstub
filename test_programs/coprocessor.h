@@ -6,8 +6,8 @@ typedef void (*mcr_func_t)(uint32_t);
 
 static uint32_t get_coprocessor_register(unsigned cp_num, unsigned opcode_1, unsigned cr_n, unsigned cr_m, unsigned opcode_2)
 {
-	uint32_t buf[2];
-	mrc_func_t mrc_func = (mrc_func_t) buf;
+	volatile uint32_t buf[2];
+	mrc_func_t mrc_func = (mrc_func_t) &buf[0];
 	
 	buf[0] = (0xe << 28) //Condition
 		     | (0xe << 24) //Fixed part
@@ -26,8 +26,8 @@ static uint32_t get_coprocessor_register(unsigned cp_num, unsigned opcode_1, uns
 
 static void set_coprocessor_register(unsigned cp_num, unsigned opcode_1, unsigned cr_n, unsigned cr_m, unsigned opcode_2, uint32_t val)
 {
-	uint32_t buf[2];
-	mcr_func_t mcr_func = (mcr_func_t) buf;
+	volatile uint32_t buf[2];
+	mcr_func_t mcr_func = (mcr_func_t) &buf[0];
 	
 	buf[0] = (0xe << 28) //Condition
 		     | (0xe << 24) //Fixed part

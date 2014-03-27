@@ -3,12 +3,14 @@
 
 #include <stdint.h>
 
-#define UART_BASE ((uint16_t *) 0x80030000)
+#define UART_BASE ((volatile uint16_t *) 0x80030000)
 
 static int uart_getc()  {
 	while (!(UART_BASE[1] & (1 << 0x04)));
 	return UART_BASE[3];
 }
+
+//static __attribute__((__naked__))
 
 static int uart_putc(int c)  {
 	while (UART_BASE[1] & (1 << 0x6));

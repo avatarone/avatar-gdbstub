@@ -11,6 +11,7 @@ __attribute__((__naked__)) void _start()  {
           /* TODO: Put startup code here, e.g., stack initialization,
              and then call main. */
     __asm__(
+	".section .init         \n"
     "b _reset               \n"
 	"b _und_exception       \n"
 	"b _svc_exception       \n"
@@ -19,6 +20,7 @@ __attribute__((__naked__)) void _start()  {
 	"nop                    \n"
 	"b _irq_exception       \n"
 	"b _fiq_exception       \n"
+	".section .text         \n"
 "_und_exception:        \n"
 	"mov r0, #1             \n"
 	"b _exception           \n"
@@ -39,7 +41,7 @@ __attribute__((__naked__)) void _start()  {
 	"b _exception           \n"
 "_exception:           \n"
 	"mov r1, lr             \n"
-	"ldr sp, =0x60016ffc    \n"
+	"ldr sp, =0x60017ffc    \n" 
 	"bl exception_handler   \n"
 	"b .                    \n"
 "_reset:                \n"
