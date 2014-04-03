@@ -48,7 +48,7 @@ def open_serial(port, baudrate):
     
 def encode_nmea_message(cmd):
     checksum = reduce(lambda r, x: r ^ x, cmd.encode(encoding = "ascii"))
-    return ("$%s*%02X" % (cmd, checksum)).encode(encoding = "ascii")
+    return ("$%s*%02X\r\n" % (cmd, checksum)).encode(encoding = "ascii")
 
 class SirfGPS():
     def __init__(self, port):
@@ -58,7 +58,9 @@ class SirfGPS():
     def switch_to_binary_sirf(self):
         nmea_cmd = "PSRF100,0,38400,8,1,0"
         raw_cmd = encode_nmea_message(nmea_cmd)
-        
+       
+        self._port.write("\r\n".encode(encoding = "ascii")) 
+        self._port.flush()
         self._port.write(raw_cmd)
         self._port.flush()
         self._port.timeout = 0.1
@@ -74,7 +76,7 @@ class SirfGPS():
     def switch_to_bootloader_mode(self):
         self._port.write(bytes([0xa0, 0xa2, 0x00, 0x01, 0x94, 0x00, 0x94, 0xb0, 0xb3]))
         self._port.flush()
-        time.sleep(0x5)
+        time.sleep(0.5)
         self._port.flushInput()
         #drain input buffer
         self._port.timeout = 0.5
