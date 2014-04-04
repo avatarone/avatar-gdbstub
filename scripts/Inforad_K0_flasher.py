@@ -10,40 +10,11 @@ import select
 import socket
 import time
 from functools import reduce
+import logging
 
-class OSXSerial():
-    def __init__(self, port, baudrate):
-        self._handle = os.open(port, os.O_RDWR)
-        cmd = ["stty", "-f", port, "%d" % baudrate, "cs8", "-crtscts", "cread", "clocal", "-cstopb", "-parenb"]
-        subprocess.check_call(cmd)
-        self._timeout = None
-        
-    def read(self, num = 0):
-        result = select.select([self._handle], [], [], self._timeout)
-
-        if self._handle in result[0]:
-            return os.read(self._handle, num)
-        else:
-            raise serial.SerialTimeoutException()
-        
-    def write(self, buf):
-        os.write(self._handle, buf)
-        
-    def close(self):
-        os.close(self._handle)
-        
-    @property
-    def timeout(self):
-        return self._timeout
-
-    @timeout.setter
-    def timeout(self, value):
-        self._timeout = value
+log = logging.getLogger("Inforad_K0_flasher")
         
 def open_serial(port, baudrate):
-#    if platform.system() == "Darwin":
-#        return OSXSerial(port, baudrate)
-#    else:
     return serial.Serial(port, baudrate, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE)
     
 def encode_nmea_message(cmd):
@@ -56,33 +27,58 @@ class SirfGPS():
         self._port = open_serial(port, 4800)
         
     def switch_to_binary_sirf(self):
+        MAX_ERR_COUNT = 5
         nmea_cmd = "PSRF100,0,38400,8,1,0"
         raw_cmd = encode_nmea_message(nmea_cmd)
        
-        self._port.write("\r\n".encode(encoding = "ascii")) 
+        nonascii_found = False
+        error_count = 0
+        while not nonascii_found and error_count < MAX_ERR_COUNT:
+            self._port.write("\r\n".encode(encoding = "ascii")) 
+            self._port.flush()
+            self._port.write(raw_cmd)
+            self._port.flush()
+            time.sleep(0.5)
+            self._port.timeout = 0.1
+            
+            try:
+                for count in range(0, 10000):
+                    data = self._port.read(1)
+                    if not data:
+                        break
+                    if data[0] >= 128:
+                        nonascii_found = True
+                        break
+                        
+            except serial.SerialTimeoutException:
+                pass
+                
+            error_count += 1
+        
+        if error_count >= MAX_ERR_COUNT:
+            log.error("Too many errors while trying to switch to binary SIRF mode, aborting")
+            sys.exit(1)
+            
+        self._port.baudrate = 38400
+        
+    def switch_to_bootloader_mode(self):
+        self._port.write(bytes([0xa0, 0xa2, 0x00, 0x01, 0x94, 0x00, 0x94, 0xb0, 0xb3]))
         self._port.flush()
-        self._port.write(raw_cmd)
-        self._port.flush()
-        self._port.timeout = 0.1
+        
+        #drain input buffer
+        self._port.timeout = 0
         try:
             while self._port.read(1):
                 pass
         except serial.SerialTimeoutException:
             pass
-        self._port.close()
-        
-        self._port = open_serial(self._portname, 38400)
-        
-    def switch_to_bootloader_mode(self):
-        self._port.write(bytes([0xa0, 0xa2, 0x00, 0x01, 0x94, 0x00, 0x94, 0xb0, 0xb3]))
-        self._port.flush()
+            
         time.sleep(0.5)
-        self._port.flushInput()
-        #drain input buffer
         self._port.timeout = 0.5
         try:
-            self._port.read(1)
-#            raise RuntimeError("No input expected on serial port")
+            data = self._port.read(1)
+            if data:
+                raise RuntimeError("No input expected on serial port")
         except serial.SerialTimeoutException:
             pass
             
@@ -131,10 +127,10 @@ class SirfGPS():
 #        if len(data) == 1 and data[0] == 0x06:
     
 def main():
-    parser = argparse.ArgumentParser(description = "Run a debugging stub on the Inforad K0 GPS stick")
-    parser.add_argument("-s", "--serial", metavar = "FILE", dest = "serial", help = "Serial port where the GPS is connected")
-    parser.add_argument("-l", "--loader", metavar = "FILE", dest = "loader_file", help = "Bootloader file")
-    parser.add_argument("-p", "--port", type = int, dest = "port", help = "TCP port serving the serial connection")
+    parser = argparse.ArgumentParser(description = "Run a debugging stub on the Inforad K0 GPS stick.")
+    parser.add_argument("-s", "--serial", metavar = "FILE", dest = "serial", default = "/dev/ttyUSB0", help = "Serial port where the GPS is connected")
+    parser.add_argument("loader_file", metavar = "FILE", help = "Bootloader file")
+    parser.add_argument("-p", "--port", type = int, dest = "port", default = 2000, help = "TCP port serving the serial connection")
     
     args = parser.parse_args()
     gps = SirfGPS(args.serial)
@@ -145,6 +141,10 @@ def main():
     print("Switched to binary SIRF mode")
     gps.switch_to_bootloader_mode()
     print("Switched to bootloader mode")
+    # while True:
+   #      data = gps._port.read(1)
+   #      if data:
+   #          sys.stdout.write(data.decode(encoding = "iso-8859-1"))
     gps.upload_bootloader(bootloader)
     print("Uploaded bootloader, serving TCP port")
     gps.serve_serial_port(args.port)
