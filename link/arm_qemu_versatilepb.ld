@@ -10,11 +10,26 @@ OUTPUT_ARCH(arm)
 ENTRY(_start)
 SECTIONS
 {
-    . = 0x40 ;  
     _gdb_stub_start = .;
-/*    . = 0x359E00 ;   */
-    .text         : { *(.vect) *(.text) }
+    .text         : { *(.exception_table) *(.init) *(.text) }
     .data         : { *(.data) }
     .bss          : { *(.bss) }
+    
+/*
+    .debug_info   : { *(.debug_info) } 
+    .rel.debug_info : { *(.rel.debug_info) }
+    .debug_abbrev : { *(.debug_abbrev) }
+    .debug_loc    : { *(.debug_loc) }
+    .debug_aranges : { *(.debug_aranges) }
+    .rel.debug_arange : { *(.rel.debug_arange) }
+    .debug_line   : { *(.debug_line) }
+    .rel.debug_line : { *(.rel.debug_line) }
+    .debug_str    : { *(.debug_str) }
+    .comment      : { *(.comment) }
+    .ARM.attributes : { *(.ARM.attributes) }
+    .debug_frame  : { *(.debug_frame) }
+    .rel.debug_frame : { *(.rel.debug_frame) }
+    .shstrtab : { *(.shstrtab) }
+    .symtab : { *(.symtab) }	*/
     _gdb_stub_end = .;
 }

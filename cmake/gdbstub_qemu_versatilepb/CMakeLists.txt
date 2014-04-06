@@ -11,10 +11,7 @@ SET (STUB_ASSEMBLER_FILES
     src/utils_arm.S)
 
 SET (STUB_ARM_FILES
-    )
-
-SET (STUB_THUMB_FILES
-    src/utils.c
+	src/utils.c
     src/GdbHostInterface.c
     src/utils.c 
     src/Serial_pl011.c
@@ -25,8 +22,11 @@ SET (STUB_THUMB_FILES
     src/crc.c
     )
 
+SET (STUB_THUMB_FILES
+    )
+
 SET (STUB_NAME gdbstub_qemu_versatilepb)
-SET (STUB_LINKER_FILE ${PROJECT_SOURCE_DIR}/link/arm_ST3320413AS_0x7000.ld)
+SET (STUB_LINKER_FILE ${PROJECT_SOURCE_DIR}/link/arm_qemu_versatilepb.ld)
 SET (STUB_CONFIGURATION_HEADER ${PROJECT_SOURCE_DIR}/include/qemu_versatilepb_gdb_config.h)
 SET (TARGET_ARCH armv5t)
 

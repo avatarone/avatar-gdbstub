@@ -17,34 +17,37 @@
 
     .extern _arm_PAB_handler
     .extern _arm_DAB_handler
+    .extern _arm_UND_handler
 	
 	.arm
-    .section .start
+    .section .init
 _start:
-        mov r3, lr
-        /* Install PAB and DAB handler */
-        /* First write the target adresses */
-        bl get_code_offset
-        ldr r2, =_arm_PAB_handler
-        add r2, r2, r0
-        ldr r1, =_arm_DAB_handler
-        add r1, r1, r0
+		/* The exception vector table */
+		b _reset /* RST */
+		ldr pc, =_arm_UND_handler /* UND */
+		b .      /* SVC */
+		ldr pc, =_arm_PAB_handler /* PAB */
+		ldr pc, =_arm_DAB_handler /* DAB */
+		nop /* Reserved */
+		b . /* IRQ */
+		b . /* FIQ */
 
-        mov r0, #0xC
-        str r2, [r0, #0x20]
-        str r1, [r0, #0x24]
+_reset:
+		mrs r0, CPSR
+		mov r1, #0x1f
+		mvn r1, r1
+		and r2, r0, r1
+		orr r2, r2, #0x1b
+		msr CPSR, r2
+		ldr sp, =0x10000
+		msr CPSR, r0
+		ldr sp, =0x20000
 
-        /* And then the LDR instruction */
-        ldr r1, =(0xe59ff000 | 0x18)
-        str r1, [r0]
-        str r1, [r0, #0x04]
-        
+		b _arm_UND_handler
         /* Hit breakpoint to allow GDB initialization */
-        bkpt #0x42 
-        bx r3
-
-.text
-.arm
+        .long 0xe7f001f0
+        /* bkpt #0x42 */
+        b _reset
 
 
 /* I doubt we would need something like that one day ...
