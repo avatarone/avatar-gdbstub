@@ -58,6 +58,8 @@ static void target_exit_monitor(StubState *state)
 static void start_packet(StubState *state);
 static void put_string(StubState *state, const char * str);
 static void end_packet(StubState *state);
+static uint32_t get_hex_number(StubState* state, unsigned digits);
+static int get_packet_byte(StubState* state);
 
 static void put_hex_uint8(StubState *state, uint8_t val)
 {
@@ -148,43 +150,63 @@ static void put_empty_packet(StubState *state)
 
 void put_hex_uint32(StubState *state, uint32_t val)
 {
-    put_hex_uint8(state, val >> 24);
+	put_hex_buffer(state, (const uint8_t *) &val, sizeof(val));
+/*    put_hex_uint8(state, val >> 24);
     put_hex_uint8(state, val >> 16);
     put_hex_uint8(state, val >> 8);
-    put_hex_uint8(state, val);
+    put_hex_uint8(state, val); */
 }
 
 void put_hex_uint16(StubState *state, uint16_t val)
 {
-    put_hex_uint8(state, val >> 8);
-    put_hex_uint8(state, val);
+	put_hex_buffer(state, (const uint8_t *) &val, sizeof(val));
+/*    put_hex_uint8(state, val >> 8);
+    put_hex_uint8(state, val); */
 }
 
-static uint32_t get_hex_uint32(StubState *state, int len)
+/**
+ * Read one byte encoded as two hex characters from the serial port.
+ * @returns -1 if the end of command character '#' is detected,
+ *          -2 if a character cannot be converted to a hex nibble,
+ *          and the byte's value otherwise.
+ */
+static int get_hex_uint8(StubState* state)
 {
-    uint32_t val = 0;
-    char c;
-    int i;
-    
-    for (i = 0; i < 2 * len; i++)
-    {
-        c = Serial_read_byte_blocking();
-        if (c == '#')
-        {
-            state->host_interface.input_packet_finished = 1;
-            return val;
-        }
-              
-        state->host_interface.input_checksum += c;
-        
-        if (hex_char_to_nibble(c) == -1)  
-            return val;
-   
-        val = (val << 4) | hex_char_to_nibble(c);
-    }
-    
-    return val;
-} 
+	uint8_t val = 0;
+	uint8_t nibble;
+
+	nibble = hex_char_to_nibble(get_packet_byte(state));
+	if (nibble == -1)
+	{
+		return -1;
+	}
+	val = nibble << 4;
+
+	nibble = hex_char_to_nibble(get_packet_byte(state));
+	if (nibble == -1)
+	{
+		return -1;
+	}
+
+	return val | nibble;
+}
+
+static uint8_t get_checksum(StubState* state)
+{
+	int low_nibble;
+	int high_nibble;
+
+	high_nibble = hex_char_to_nibble(Serial_read_byte_blocking());
+	if (high_nibble < 0) {
+		//TODO: Error
+	}
+	low_nibble = hex_char_to_nibble(Serial_read_byte_blocking());
+	if (low_nibble < 0) {
+		//TODO: Error
+	}
+
+	return (high_nibble << 4) | low_nibble;
+}
 
 static void get_hex_buffer(StubState *state, uint8_t *buffer, int len)
 {
@@ -193,17 +215,22 @@ static void get_hex_buffer(StubState *state, uint8_t *buffer, int len)
 	 * little endian machines
 	 */
     int i = 0;
+    int byte;
     
     for (i = 0; i < len; i++)
     {
-        buffer[i] = (uint8_t) get_hex_uint32(state, 1);
+    	byte = get_hex_uint8(state);
+    	if (byte == -1)  {
+    		return;
+    	}
+        buffer[i] = (uint8_t) byte;
     }
 }
 
 static int received_packet_verify(StubState *state)
 {
     uint8_t calculated_checksum = state->host_interface.input_checksum;
-    uint8_t received_checksum = get_hex_uint32(state, 1);
+    uint8_t received_checksum = get_checksum(state);
     
     if (state->host_interface.input_packet_finished && (calculated_checksum == received_checksum))
     {
@@ -252,6 +279,32 @@ static int get_packet_byte(StubState *state)
     }
 }
 
+/**
+ * Reads a hex encoded number from the serial port.
+ * The number should have at most <b>len</b> digits.
+ * The number is encoded as read, that is big endian.
+ * The number is terminated by a non-hex character.
+ */
+static uint32_t get_hex_number(StubState* state, unsigned len)
+{
+	unsigned i;
+	uint32_t val = 0;
+	int nibble;
+
+	for (i = 0; i < len; i++)
+	{
+		nibble = hex_char_to_nibble(get_packet_byte(state));
+		if (nibble == -1)
+		{
+			return val;
+		}
+
+		val = (val << 4) | nibble;
+	}
+
+	return val;
+}
+
 // static void get_ignore_bytes(StubState *state, int count)
 // {
 //     int i;
@@ -296,8 +349,8 @@ void HostInterface_communicate(StubState *state)
         {
             case 'm':
             {
-                uint32_t address = get_hex_uint32(state, 8);
-                uint32_t len = get_hex_uint32(state, 8);
+                uint32_t address = get_hex_number(state, 9);
+                uint32_t len = get_hex_number(state, 9);
                 
                 if (received_packet_verify(state))
                 {
@@ -311,20 +364,25 @@ void HostInterface_communicate(StubState *state)
                         }
                         else
                         {
-                            if ((len == 4 && ((address & 3) == 0)) || (len == 2 && ((address & 1) == 0)) || len == 1)
+                        	//If memory is a long or short int and aligned
+                            if ((len == 4 && ((address & 3) == 0)) || (len == 2 && ((address & 1) == 0)))
                             {
 								invalidate_data_cache();
 								value_t buf = Memory_read_typed(state, address, len);
-                                //TODO: Only works on little endian
-                                //put_hex_buffer(state, (const uint8_t *) &buf, len);
-								if (len == 4)
-									put_hex_uint32(state, buf);
-								if (len == 2)
-									put_hex_uint16(state, (uint16_t)buf);
-								if (len == 1)
-									put_hex_uint8(state, (uint8_t)buf);
-                                
+								switch (len) {
+									case 4: {
+										uint32_t val = buf;
+										put_hex_buffer(state, (const uint8_t *) &val, sizeof(val));
+										break;
+									}
+									case 2: {
+										uint16_t val = buf;
+										put_hex_buffer(state, (const uint8_t *) &val, sizeof(val));
+										break;
+									}
+								}
                             }
+                            //Unaligned access
                             else
                             {
                                 uint32_t i;
@@ -346,8 +404,8 @@ void HostInterface_communicate(StubState *state)
             }
             case 'M':
             {
-                uint32_t address = get_hex_uint32(state, 9);
-                uint32_t len = get_hex_uint32(state, 9);
+                uint32_t address = get_hex_number(state, 9);
+                uint32_t len = get_hex_number(state, 9);
                 
                 if (!Memory_is_valid_address(state, address) || !Memory_is_valid_address(state, address + len - 1))
                 {
@@ -356,11 +414,22 @@ void HostInterface_communicate(StubState *state)
                 }
                 else
                 {
-                    if ((len == 4 && ((address & 0x3) == 0)) || (len == 2 && ((address & 1) == 0)) || len == 1)
+                    if ((len == 4 && ((address & 0x3) == 0)) || (len == 2 && ((address & 1) == 0)))
                     {
-                        uint32_t buf = get_hex_uint32(state, len);
-                        Memory_write_typed(state, address, len, buf);
-						flush_data_cache_by_mva(address);
+                    	switch (len) {
+                    		case 4: {
+                    			uint32_t val;
+                    			get_hex_buffer(state, (uint8_t *) &val, sizeof(val));
+                    			Memory_write_typed(state, address, sizeof(val), val);
+                    			break;
+                    		}
+                    		case 2: {
+                    			uint16_t val;
+								get_hex_buffer(state, (uint8_t *) &val, sizeof(val));
+								Memory_write_typed(state, address, sizeof(val), val);
+								break;
+                    		}
+                    	}
                     }
                     else 
                     {
@@ -394,11 +463,11 @@ void HostInterface_communicate(StubState *state)
                         for (i = 0; i < 16; i++)
                         {
                             val = RegisterMap_get_register(state, Gdb_map_gdb_register_number_to_stub(state, i));
-							put_hex_uint32(state, val);
+                            put_hex_buffer(state, (const uint8_t *) &val, sizeof(val));
                         }
                         
                         val = RegisterMap_get_register(state, Gdb_map_gdb_register_number_to_stub(state, 25));
-						put_hex_uint32(state, val);
+                        put_hex_buffer(state, (const uint8_t *) &val, sizeof(val));
                         
                         end_packet(state);
                     } while (Serial_read_byte_blocking() != '+');
@@ -413,11 +482,11 @@ void HostInterface_communicate(StubState *state)
                 //TODO: ARM specific
                 for (i = 0; i < 16; i++)
                 {
-					val = get_hex_uint32(state, 4);
+                	get_hex_buffer(state, (uint8_t *) &val, sizeof(val));
                     RegisterMap_set_register(state, Gdb_map_gdb_register_number_to_stub(state, i), val);     
                 }
                 
-				val = get_hex_uint32(state, 4);
+                get_hex_buffer(state, (uint8_t *) &val, sizeof(val));
                 RegisterMap_set_register(state, Gdb_map_gdb_register_number_to_stub(state, 25), val);
                     
                 ignore_rest_of_packet(state);
@@ -451,7 +520,7 @@ void HostInterface_communicate(StubState *state)
             }
             case 'p':
             {
-                uint32_t reg_id = get_hex_uint32(state, 8);
+                uint32_t reg_id = get_hex_number(state, 9);
                 register_t val;
                 
                 if (received_packet_verify(state))
@@ -459,7 +528,7 @@ void HostInterface_communicate(StubState *state)
                     val = RegisterMap_get_register(state, Gdb_map_gdb_register_number_to_stub(state, reg_id));
                     start_packet(state);
                     //TODO: Register size is ARM specific
-					put_hex_uint32(state, val);
+                    put_hex_buffer(state, (const uint8_t *) &val, sizeof(val));
                     end_packet(state);
                 } else {
 					put_error_packet(state, 1);
@@ -468,13 +537,15 @@ void HostInterface_communicate(StubState *state)
             } 
             case 'P':
             {
-                uint32_t reg_id = get_hex_uint32(state, 8);
-                register_t val = get_hex_uint32(state, 4);
+                uint32_t reg_id = get_hex_number(state, 9);
+                register_t val;
+                get_hex_buffer(state, (uint8_t *) &val, sizeof(val));
                 RegisterMap_set_register(state, Gdb_map_gdb_register_number_to_stub(state, reg_id), val);
                 receive_packet_end(state);
                 put_ok_packet(state);
                 break;
             } 
+#if defined(CONFIG_HW_BREAKPOINT) || defined(CONFIG_SW_BREAKPOINT)
 			case 'z':
 			{
 				uint32_t type = get_packet_byte(state);
@@ -486,11 +557,11 @@ void HostInterface_communicate(StubState *state)
 					/* skip , */
 					get_packet_byte(state);
 					/* addr */
-					uint32_t addr = get_hex_uint32(state, 4);
+					uint32_t addr = get_hex_number(state, 8);
 					/* skip , */
 					get_packet_byte(state);
 					/* kind */
-					uint32_t kind = get_hex_uint32(state, 4);
+					uint32_t kind = get_hex_number(state, 8);
 					receive_packet_end(state);
 					set_hw_breakpoint(state, addr, 0);
 					put_ok_packet(state);
@@ -503,6 +574,8 @@ void HostInterface_communicate(StubState *state)
 				}
 				break;
 			}
+#endif /* defined(CONFIG_HW_BREAKPOINT) || defined(CONFIG_SW_BREAKPOINT) */
+#if defined(CONFIG_CHECKSUM)
 			case 'u':
 			{
 				/* compute the crc of a buffer:
@@ -510,8 +583,8 @@ void HostInterface_communicate(StubState *state)
 				 * $m148ac,4#2e
 				 * the reply is the checksum (one byte)
 				 */
-				uint32_t address = get_hex_uint32(state, 8);
-				uint32_t len = get_hex_uint32(state, 8);
+				uint32_t address = get_hex_number(state, 9);
+				uint32_t len = get_hex_number(state, 9);
 
 				if (received_packet_verify(state)) {
 					uint8_t crc, buf;
@@ -530,6 +603,7 @@ void HostInterface_communicate(StubState *state)
 				}
 				break;
 			}
+#endif /* defined(CONFIG_CHECKSUM) */
             default:
             {
                 if (ignore_rest_of_packet(state))

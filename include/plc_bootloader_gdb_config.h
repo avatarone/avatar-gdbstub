@@ -55,6 +55,8 @@ static inline void led_blink(uint32_t led_id)
 
 #define HAS_LOW_LEVEL_HELPERS 1
 
+#define CONFIG_CHECKSUM 1
+
 #include "GdbHostInterface.h"
 #include "ArmRegisterMap.h"
 #include "Serial.h"
