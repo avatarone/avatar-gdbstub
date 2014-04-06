@@ -12,7 +12,7 @@ SECTIONS
 {
     . = 0x0 ;  
     _gdb_stub_start = .;
-    .text         : { *(.exception_table) *(.header) *(.init) *(.text) }
+    .text         : { *(.exception_table) *(.init) *(.text) }
     .data         : { *(.data) }
     .bss          : { *(.bss) }
     _gdb_stub_end = .;
