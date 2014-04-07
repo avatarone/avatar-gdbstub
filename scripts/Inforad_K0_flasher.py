@@ -12,6 +12,7 @@ import time
 from functools import reduce
 import logging
 
+
 #How many times we retry an operation before giving up
 MAX_ERROR_COUNT = 5
 
@@ -19,7 +20,7 @@ log = logging.getLogger("Inforad_K0_flasher")
 
 class FlasherError(RuntimeError):
     def __init__(self, message):
-        super(self, RuntimeError).__init__(message)
+        super(FlasherError, self).__init__(message)
     
 def encode_nmea_message(cmd):
     checksum = reduce(lambda r, x: r ^ x, cmd.encode(encoding = "ascii"))
