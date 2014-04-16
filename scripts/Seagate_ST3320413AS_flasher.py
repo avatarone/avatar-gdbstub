@@ -12,7 +12,8 @@ import time
 import re
 import select
 import socket
-import sys
+import argparse
+import subprocess
 
 SLEEP_TIME_BETWEEN_OFF_ON = 3
 MAX_ENTER_BOOT_MENU_TIME = 3
@@ -20,15 +21,14 @@ MAX_ENTER_BOOT_MENU_TIME = 3
 log = logging.getLogger(__name__)
 
 class ResetController():
-    def __init__(self, serial_port_name, is_inverted = False):
-        self._serial_port = serial.Serial(serial_port_name)
-        self.is_inverted = is_inverted
+    def __init__(self, controller_script):
+        self._controller_script = controller_script
         
     def set_on(self):
-        self._serial_port.setRTS(not self.is_inverted)
+        subprocess.check_call([self._controller_script, "on"])
         
     def set_off(self):
-        self._serial_port.setRTS(self.is_inverted)
+        subprocess.check_call([self._controller_script, "off"])
         
     def reset(self):
         self.set_off()
@@ -43,11 +43,11 @@ class UnexpectedReplyException(Exception):
         return "Unexpected reply: '%s'" % self._reply
 
 class StubDownloader():
-    def __init__(self, reset_serial_port, serial_port_name = "/dev/ttyUSB0"):
-        if reset_serial_port == "none":
+    def __init__(self, reset_controller, serial_port_name = "/dev/ttyUSB0"):
+        if reset_controller is None:
             self._emulated_target = True
         else:
-            self.reset_controller = ResetController(reset_serial_port)
+            self.reset_controller = reset_controller
             self._emulated_target = False
             
         self._serial_port = serial.Serial(port = serial_port_name, 
@@ -78,13 +78,22 @@ class StubDownloader():
                 self._reset_hdd()
                 start_enter_bootmenu_time = time.time()
                 buffer = bytes()
-                
+            
             self._serial_port.write(bytes('UUUUUUUUUUUUUUUUUU', encoding = 'ascii'))
-            buffer += self._serial_port.read(1)
+            try:
+                buffer += self._serial_port.read(1)
+            except serial.serialutil.SerialException as ex:
+                if not str(ex).startswith("device reports readiness to read"):
+                    raise ex
         
         #Flush input stream
-        while select.select([self._serial_port], [], [], 0.01)[0]:
+        try:
+            while select.select([self._serial_port], [], [], 0.01)[0]:
                 self._serial_port.read(1)
+        except serial.serialutil.SerialException as ex:
+            if not str(ex).startswith("device reports readiness to read"):
+                    raise ex
+
         
         #Check that prompt is ready for commands (not trailing U in output)
         self._resynchronize_interface()
@@ -99,19 +108,32 @@ class StubDownloader():
         while not EXPRESSION_RET in buffer:
             self._serial_port.write(bytes("?", encoding = "ascii"))
             #Read all characters that are still in the input stream
-            while select.select([self._serial_port], [], [], 0.01)[0]:
-                buffer += self._serial_port.read(1)
+            try:
+                while select.select([self._serial_port], [], [], 0.01)[0]:
+                    buffer += self._serial_port.read(1)
+            except serial.serialutil.SerialException as ex:
+                if not str(ex).startswith("device reports readiness to read"):
+                    raise ex
+
         
         buffer = bytes()   
         while not EXPRESSION_ECHO_OFF in buffer:     
             self._serial_port.write(bytes("TE\r", encoding = 'ascii'))
             time.sleep(0.1) #sleep needed for emulated target
             while select.select([self._serial_port], [], [], 0.01)[0]:
-                buffer += self._serial_port.read(1)
+                try:
+                    buffer += self._serial_port.read(1)
+                except serial.serialutil.SerialException as ex:
+                    if not str(ex).startswith("device reports readiness to read"):
+                        raise ex
                 
         #Flush input stream
-        while select.select([self._serial_port], [], [], 0.01)[0]:
-                self._serial_port.read(1)
+        try:
+            while select.select([self._serial_port], [], [], 0.01)[0]:
+                buffer += self._serial_port.read(1)
+        except serial.serialutil.SerialException as ex:
+            if not str(ex).startswith("device reports readiness to read"):
+                raise ex
         
     def _set_baudrate(self, baudrate):
         DIVISOR_TABLE = {9600   : 0x28b, 
@@ -156,7 +178,13 @@ class StubDownloader():
         self._serial_port.write(data)
         
         expected_reply = bytes("\r\nAddr Ptr = 0x%08X\r\n> " % address, encoding = 'ascii')
-        reply = self._serial_port.read(len(data) + len(expected_reply))
+        to_read_bytes = len(data) + len(expected_reply)
+        reply = bytes()
+        try:
+            reply = self._serial_port.read(to_read_bytes)
+        except serial.serialutil.SerialException as ex:
+            if not str(ex).startswith("device reports readiness to read"):
+                raise ex
         
         if reply != data + expected_reply:
             raise UnexpectedReplyException(reply)
@@ -223,26 +251,44 @@ class StubDownloader():
         except socket.error:
             log.exception("Socket disconnected")
                 
-
-if __name__ == "__main__":
-    logging.basicConfig(level = logging.DEBUG)
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", action = "count", default = 0, dest = "verbosity", 
+        help = "Increase verbosity (Can be specified several times to increase more)")
+    parser.add_argument("--power-control", type = str, metavar = "FILE", dest = "power_control",
+        help = "Executable that can switch the HDD on and off (\"on\" or \"off\" is passed as first argument)")
+    parser.add_argument("--serial", type = str, metavar = "FILE", dest = "serial",
+        help = "Serial port to which the HDD is connected")
+    parser.add_argument("--gdbstub", type = str, metavar = "FILE", dest = "gdbstub",
+        help = "GDB stub that is injected in the HDD")
+    parser.add_argument("--gdbstub-loadaddress", type = int, dest = "gdbstub_loadaddress",
+        help = "Load address of GDB stub")
+    parser.add_argument("--port", type = int, default = 2000, dest = "port",
+        help = "Port where HDD flasher is listening for serial connections after GDB stub has been flashed")
+    return parser.parse_args()
     
-    if len(sys.argv) < 7:
-        sys.stdout.write("Usage: %s <reset serial port> <comm serial port> <stub file> <load address> <entry point> <serve port>\n")
-        sys.exit(1)
+def set_verbosity(verbosity):
+    if verbosity >= 3:
+        logging.basicConfig(level = logging.DEBUG)
+    elif verbosity >= 2:
+        logging.basicConfig(level = logging.INFO)
+    elif verbosity >= 1:
+        logging.basicConfig(level = logging.WARN)
+    else:
+        logging.basicConfig(level = logging.ERROR)
+        
+def main():
+    args = parse_arguments()
+    set_verbosity(args.verbosity)
     
-    reset_serial_port = sys.argv[1]
-    comm_serial_port = sys.argv[2]
-    stub_file = sys.argv[3]
-    load_address = sys.argv[4].startswith("0x") and int(sys.argv[4], 16) or int(sys.argv[4])
-    entry_point = sys.argv[5].startswith("0x") and int(sys.argv[5], 16) or int(sys.argv[5])
-    serve_port = int(sys.argv[6])
-    
-    stub_downloader = StubDownloader(reset_serial_port, comm_serial_port)
-    sys.stdout.write("Serial ports opened\n")
-    stub_downloader.load_stub(stub_file, load_address, entry_point)
-    sys.stdout.write("Stub download finished\n")
+    stub_downloader = StubDownloader(ResetController(args.power_control), args.serial)
+    log.info("Serial ports opened")
+    stub_downloader.load_stub(args.gdbstub, args.gdbstub_loadaddress, args.gdbstub_loadaddress)
+    log.info("Stub download finished")
     while True:
-        stub_downloader.serve_serial_port(serve_port)
-        sys.stdout.write("Serial port stream client disconnected\n")
-    sys.stdout.write("exiting\n")
+        stub_downloader.serve_serial_port(args.port)
+        log.warn("Serial port stream client disconnected")
+    log.info("exiting")
+    
+if __name__ == "__main__":
+    main()
