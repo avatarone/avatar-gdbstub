@@ -9,6 +9,7 @@
 
 #include  "crc.h"
 
+#ifdef CONFIG_CHECKSUM
 static unsigned char r1[16] = {
     0x00, 0x5e, 0xbc, 0xe2, 0x61, 0x3f, 0xdd, 0x83,
     0xc2, 0x9c, 0x7e, 0x20, 0xa3, 0xfd, 0x1f, 0x41,
@@ -30,3 +31,5 @@ unsigned char crc_calc(uint8_t * crc, uint8_t data)
     *crc = r1[i&0xf] ^ r2[i>>4];
     return *crc;
 }
+
+#endif /* CONFIG_CHECKSUM */

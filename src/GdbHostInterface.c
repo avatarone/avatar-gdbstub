@@ -61,6 +61,10 @@ static void end_packet(StubState *state);
 static uint32_t get_hex_number(StubState* state, unsigned digits);
 static int get_packet_byte(StubState* state);
 
+#ifdef CONFIG_MEMORY_ERROR
+static int in_memory_access = 0;
+#endif /* CONFIG_MEMORY_ERROR */
+
 static void put_hex_uint8(StubState *state, uint8_t val)
 {
     char c = nibble_to_hex_char(val >> 4);
@@ -334,9 +338,20 @@ void HostInterface_communicate(StubState *state)
 //    gdb_init(&state->host_interface);
     
     target_enter_monitor(state);
- 
+
+#ifdef CONFIG_MEMORY_ERROR
+    if (in_memory_access && state->signal == 6)
+    {
+        put_error_packet(state, 1);
+    }
+    else
+    {
+        put_signal_packet(state);
+    }
+#else
     put_signal_packet(state);
 	signal_debug_enter();
+#endif
     
     while (1)
     {
@@ -356,19 +371,23 @@ void HostInterface_communicate(StubState *state)
                 {
                     do
                     {
-                        start_packet(state);
                         
                         if (!Memory_is_valid_address(state, address) || !Memory_is_valid_address(state, address + len - 1))
                         {
+                            start_packet(state);
                             put_dummy_bytes(state, len);
                         }
                         else
                         {
+#ifdef CONFIG_MEMORY_ERROR
+                            in_memory_access = 1;
+#endif  /* CONFIG_MEMORY_ERROR */
                         	//If memory is a long or short int and aligned
                             if ((len == 4 && ((address & 3) == 0)) || (len == 2 && ((address & 1) == 0)))
                             {
 								invalidate_data_cache();
 								value_t buf = Memory_read_typed(state, address, len);
+                                start_packet(state);
 								switch (len) {
 									case 4: {
 										uint32_t val = buf;
@@ -387,6 +406,10 @@ void HostInterface_communicate(StubState *state)
                             {
                                 uint32_t i;
                                 uint8_t buf;
+
+                                //Do one memory access that would fail if address cannot be read
+                                Memory_read_typed(state, address, SIZE_CHAR);
+                                start_packet(state);
                         
                                 for (i = 0; i < len; i++)
                                 {
@@ -395,6 +418,9 @@ void HostInterface_communicate(StubState *state)
                                     put_hex_buffer(state, (const uint8_t *) &buf, 1);
                                 }
                             }
+#ifdef CONFIG_MEMORY_ERROR
+                            in_memory_access = 0;
+#endif  /* CONFIG_MEMORY_ERROR */
                         }
                     
                         end_packet(state);
@@ -414,6 +440,9 @@ void HostInterface_communicate(StubState *state)
                 }
                 else
                 {
+#ifdef CONFIG_MEMORY_ERROR
+                    in_memory_access = 1;
+#endif  /* CONFIG_MEMORY_ERROR */
                     if ((len == 4 && ((address & 0x3) == 0)) || (len == 2 && ((address & 1) == 0)))
                     {
                     	switch (len) {
@@ -443,6 +472,10 @@ void HostInterface_communicate(StubState *state)
 							flush_data_cache_by_mva(address+i);
                         }
                     }
+
+#ifdef CONFIG_MEMORY_ERROR
+                    in_memory_access = 0;
+#endif  /* CONFIG_MEMORY_ERROR */
                     
                     receive_packet_end(state);
                     put_ok_packet(state);

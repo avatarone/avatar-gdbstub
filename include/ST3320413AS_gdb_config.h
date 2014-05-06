@@ -10,6 +10,8 @@
 
 #define UART_16550_BASE ((volatile uint32_t *) 0x400D3000)
 
+#define CONFIG_MEMORY_ERROR
+
 #include "GdbHostInterface.h"
 #include "ArmRegisterMap.h"
 
