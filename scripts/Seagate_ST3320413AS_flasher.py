@@ -20,6 +20,30 @@ MAX_ENTER_BOOT_MENU_TIME = 3
 
 log = logging.getLogger(__name__)
 
+class GdbFilter():
+    def __init__(self):
+        self._state = 0
+    def add_character(self, c):
+        if self._state == 0 and c in [ord('+'), ord('-')]:
+            return bytes([c])
+        elif c == ord('$'):
+            self._state = 1
+            self._buffer = [c]
+        elif self._state == 1:
+            self._buffer.append(c)
+            if c == ord('#'):
+                self._state = 2
+        elif self._state == 2:
+            self._buffer.append(c)
+            self._state = 3
+        elif self._state == 3:
+            self._buffer.append(c)
+            self._state = 0
+            return bytes(self._buffer)
+        return None
+
+
+
 class ResetController():
     def __init__(self, controller_script):
         self._controller_script = controller_script
@@ -100,7 +124,48 @@ class StubDownloader():
 
         log.info("Entered boot menu")        
         self._serial_port.setTimeout(old_timeout)
+
+    def _soft_enter_bootloader(self):
+        old_timeout = self._serial_port.getTimeout()
+        self._serial_port.setTimeout(0.01)
+
+        self._reset_hdd()
+        time.sleep(20)
         
+        self._serial_port.write(bytes([0x1a]))
+        self._serial_port.flush()
+        time.sleep(0.1)
+        self._serial_port.write(bytes([0x03]))
+
+
+        EXPRESSION_BOOT_CMDS = bytes("Boot Cmds:", encoding = 'ascii')
+        EXPRESSION_RET = bytes("RET\r\n> ", encoding = 'ascii')
+        EXPRESSION_ECHO_OFF = bytes("Echo off\r\n> ", encoding = 'ascii')
+       
+        buffer = bytes()
+        while not EXPRESSION_BOOT_CMDS in buffer: 
+            self._serial_port.write(bytes('UUUUUUUUUUUUUUUUUU', encoding = 'ascii'))
+            try:
+                buffer += self._serial_port.read(1)
+            except serial.serialutil.SerialException as ex:
+                if not str(ex).startswith("device reports readiness to read"):
+                    raise ex
+
+        #Flush input stream
+        try:
+            while select.select([self._serial_port], [], [], 0.01)[0]:
+                self._serial_port.read(1)
+        except serial.serialutil.SerialException as ex:
+            if not str(ex).startswith("device reports readiness to read"):
+                    raise ex
+
+        
+        #Check that prompt is ready for commands (not trailing U in output)
+        self._resynchronize_interface()
+
+        log.info("Entered boot menu")        
+        self._serial_port.setTimeout(old_timeout)
+
     def _resynchronize_interface(self):
         EXPRESSION_RET = bytes("RET\r\n> ", encoding = 'ascii')
         EXPRESSION_ECHO_OFF = bytes("Echo off\r\n> ", encoding = 'ascii')
@@ -126,15 +191,15 @@ class StubDownloader():
                 except serial.serialutil.SerialException as ex:
                     if not str(ex).startswith("device reports readiness to read"):
                         raise ex
-                
+
         #Flush input stream
         try:
             while select.select([self._serial_port], [], [], 0.01)[0]:
-                buffer += self._serial_port.read(1)
+                self._serial_port.read(1)
         except serial.serialutil.SerialException as ex:
             if not str(ex).startswith("device reports readiness to read"):
-                raise ex
-        
+                    raise ex
+
     def _set_baudrate(self, baudrate):
         DIVISOR_TABLE = {9600   : 0x28b, 
                      19200  : 0x146,
@@ -217,9 +282,10 @@ class StubDownloader():
         self._go()
         
                 
-    def load_stub(self, stub_file, address, entry_point, baudrate = 115200):
+    def load_stub(self, stub_file, address, entry_point, baudrate = 115200, soft_reboot = False):
         if not self._emulated_target:
             self._enter_bootloader()
+#            self._soft_enter_bootloader()
             self._set_baudrate(baudrate)
         else:
             self._resynchronize_interface()
@@ -228,10 +294,13 @@ class StubDownloader():
         self.run_address(entry_point)
         
     def serve_serial_port(self, port):
+        LOCAL_LISTEN_ADDRESS = ("127.0.0.1", port)
+        gdb_filter = GdbFilter()
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind(("localhost", port))
+        server_socket.bind(LOCAL_LISTEN_ADDRESS)
         server_socket.listen(1)
+        log.info("Waiting for client connection on %s:%d", LOCAL_LISTEN_ADDRESS[0], LOCAL_LISTEN_ADDRESS[1])
         (client_socket, sockaddr) = server_socket.accept()
         log.info("Client connected from %s:%d", sockaddr[0], sockaddr[1])
         try:
@@ -247,7 +316,10 @@ class StubDownloader():
                     if client_socket in rd:
                         self._serial_port.write(client_socket.recv(4096))
                     if self._serial_port in rd:
-                        client_socket.send(self._serial_port.read(1))
+                        msg = gdb_filter.add_character(self._serial_port.read(1)[0])
+                        if not msg is None:
+#                            log.debug("Sending message: %s", " ".join(["%02x" % x for x in msg]))
+                            client_socket.send(msg)
         except socket.error:
             log.exception("Socket disconnected")
                 
