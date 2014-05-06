@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2007-2012 Free Software Foundation, Inc.
+
+     Copying and distribution of this file, with or without modification,
+     are permitted in any medium without royalty provided the copyright
+     notice and this notice are preserved.  -->
+
+<!DOCTYPE feature SYSTEM "gdb-target.dtd">
+<target version="1.0">
+  <architecture>arm</architecture>
+<!--  <osabi>none</osabi> -->
+  <feature name="org.gnu.gdb.arm.core">
+    <reg name="r0" bitsize="32" type="uint32" group="general"/>
+    <reg name="r1" bitsize="32" type="uint32" group="general"/>
+    <reg name="r2" bitsize="32" type="uint32" group="general"/>
+    <reg name="r3" bitsize="32" type="uint32" group="general"/>
+    <reg name="r4" bitsize="32" type="uint32" group="general"/>
+    <reg name="r5" bitsize="32" type="uint32" group="general"/>
+    <reg name="r6" bitsize="32" type="uint32" group="general"/>
+    <reg name="r7" bitsize="32" type="uint32" group="general"/>
+    <reg name="r8" bitsize="32" type="uint32" group="general"/>
+    <reg name="r9" bitsize="32" type="uint32" group="general"/>
+    <reg name="r10" bitsize="32" type="uint32" group="general"/>
+    <reg name="r11" bitsize="32" type="uint32" group="general"/>
+    <reg name="r12" bitsize="32" type="uint32" group="general"/>
+    <reg name="sp" bitsize="32" type="data_ptr" group="general"/>
+    <reg name="lr" bitsize="32"/>
+    <reg name="pc" bitsize="32" type="code_ptr" group="general"/>
+
+  <!-- The CPSR is register 25, rather than register 16, because
+       the FPA registers historically were placed between the PC
+       and the CPSR in the "g" packet.  -->
+    <reg name="cpsr" bitsize="32" regnum="25" group="general"/>
+    
+    <reg name="sp_usr" bitsize="32" regnum="27" group="banked"/>
+    <reg name="lr_usr" bitsize="32" regnum="28" group="banked"/>
+    <reg name="spsr_usr" bitsize="32" regnum="46" group="banked"/>
+    <reg name="spsr_fiq" bitsize="32" regnum="29" group="banked"/>
+    <reg name="r8_fiq" bitsize="32" regnum="30" type="uint32" group="banked"/>
+    <reg name="r9_fiq" bitsize="32" regnum="31" type="uint32" group="banked"/>
+    <reg name="r10_fiq" bitsize="32" regnum="32" type="uint32" group="banked"/>
+    <reg name="r11_fiq" bitsize="32" regnum="33" type="uint32" group="banked"/>
+    <reg name="r12_fiq" bitsize="32" regnum="34" type="uint32" group="banked"/>
+    <reg name="sp_fiq" bitsize="32" regnum="35" group="banked"/>
+    <reg name="lr_fiq" bitsize="32" regnum="36" group="banked"/>
+    <reg name="spsr_irq" bitsize="32" regnum="37" group="banked"/>
+    <reg name="sp_irq" bitsize="32" regnum="38" group="banked"/>
+    <reg name="lr_irq" bitsize="32" regnum="39" group="banked"/>
+    <reg name="spsr_svc" bitsize="32" regnum="40" group="banked"/>
+    <reg name="sp_svc" bitsize="32" regnum="41" group="banked"/>
+    <reg name="lr_svc" bitsize="32" regnum="42" group="banked"/>
+    <reg name="spsr_und" bitsize="32" regnum="43" group="banked"/>
+    <reg name="sp_und" bitsize="32" regnum="44" group="banked"/>
+    <reg name="lr_und" bitsize="32" regnum="45" group="banked"/>
+    <reg name="spsr_abrt" bitsize="32" regnum="49" group="banked"/>
+    <reg name="sp_abrt" bitsize="32" regnum="50" group="banked"/>
+    <reg name="lr_abrt" bitsize="32" regnum="51" group="banked"/>
+  </feature>
+</target>
