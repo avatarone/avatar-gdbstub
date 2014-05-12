@@ -31,7 +31,8 @@
        the FPA registers historically were placed between the PC
        and the CPSR in the "g" packet.  -->
     <reg name="cpsr" bitsize="32" regnum="25" group="general"/>
-    
+  </feature>
+  <feature name="org.gnu.gdb.arm.banked">    
     <reg name="sp_usr" bitsize="32" regnum="27" group="banked"/>
     <reg name="lr_usr" bitsize="32" regnum="28" group="banked"/>
     <reg name="spsr_usr" bitsize="32" regnum="46" group="banked"/>
